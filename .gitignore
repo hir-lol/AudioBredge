@@ -1,0 +1,14 @@
+venv/
+.venv/
+
+bat/
+
+__pycache__/
+
+*.log
+*.json
+
+.idea/
+.vscode/
+
+Thunmbs.db
