@@ -9,11 +9,32 @@ from typing import Callable
 import customtkinter as ctk
 from array import array
 import logging 
+import ctypes 
+import queue
 
 __all__ = ("load_config","get_base_path","AudioSender")
 log = logging.getLogger(__name__)
 
-def load_config(CONFIG_FILE):
+_u32 = ctypes.windll.user32
+_u32.MessageBoxW.argtypes = [ctypes.c_void_p, ctypes.c_wchar_p, ctypes.c_wchar_p, ctypes.c_uint]
+_u32.MessageBoxW.restype = ctypes.c_int
+
+_MB_YESNO_Q = 0x24
+_MB_OR_ERR = 0x10
+_IDYES = 6
+
+def ask_yes_or_no(text:str, title:str) -> bool:
+    return True if _u32.MessageBoxW(0,text,title,_MB_YESNO_Q) == _IDYES else False
+
+def show_error(text:str, title:str):
+    _u32.MessageBoxW(0,text,title,_MB_OR_ERR)
+
+def get_base_path():
+    if getattr(sys, 'frozen', False):
+        return os.path.dirname(sys.executable)
+    return os.path.dirname(os.path.abspath(__file__))
+
+def load_config(CONFIG_FILE: str = str(get_base_path()+"/config.json")) -> dict :
     if not os.path.exists(CONFIG_FILE):
         log.error("Не нашёлся конфиг по пути:",CONFIG_FILE)
         #raise FileNotFoundError(f"File not found in path: {CONFIG_FILE}")
@@ -25,11 +46,6 @@ def load_config(CONFIG_FILE):
     except Exception as e:
         log.exception("Ошибка чтения config.json")
         return {}
-
-def get_base_path():
-    if getattr(sys, 'frozen', False):
-        return os.path.dirname(sys.executable)
-    return os.path.dirname(os.path.abspath(__file__))
 
 class CustomError():
     """
@@ -98,12 +114,13 @@ class CustomError():
         self._app.destroy()
 
 class AudioSender () :
-    def __init__ (self):
+    def __init__ (self,q:queue.Queue):
         log.debug("Иницализация класса")
         self._sock = socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
         self._p = pyaudio.PyAudio()
         self._format = pyaudio.paInt16
         self.boost = 1.0
+        self.q = q
 
     def start(self, defalt: bool = False,ip: str = None):
         log.info("Получение настроек")
@@ -166,6 +183,8 @@ class AudioSender () :
 
         if self._device_index is None:
             log.error("Не нашёлся динамик")
+            self.q.put({"type":"NOTIFY","value":"Не найден виртуальный динамик"})
+            show_error("Не найден виртуальный динамик","Критическая ошибка")
             raise Exception(2)
 
         self._stream = self._p.open(

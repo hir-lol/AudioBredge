@@ -4,7 +4,8 @@ import logging
 import json
 from .protocol import *
 import queue
-# import queue
+
+from tools import show_error
 
 log = logging.getLogger(__name__)
 
@@ -48,14 +49,17 @@ class Server():
                 reader, writer = await asyncio.wait_for(asyncio.open_connection(self.ip,self.port),timeout=25.0)
                 self.reader = reader
                 self.writer = writer  
-            except asyncio.TimeoutError:
-                log.exception("Сервер не ответил")
+            except (asyncio.TimeoutError,TimeoutError):
+                log.error("Сервер не ответил")
+                show_error("Клиент не ответил на входящие подключение\nСинхронизация громкости не возможна","Ошибка подключения к клиенту по TCP")
                 return
-            except (ConnectionResetError,ConnectionRefusedError,TimeoutError,OSError):
-                log.exception(f"Ошибка при подключении к серверу {self.ip}:{self.port}")
+            except (ConnectionResetError,ConnectionRefusedError,OSError):
+                log.error(f"Ошибка при подключении к серверу {self.ip}:{self.port}")
+                show_error("Клиент отклонил входящие подключение\nСинхронизация громкости не возможна","Ошибка подключения к клиенту по TCP")
                 return
             except Exception:
                 log.exception("Неизвестная ошибка")
+                show_error("Клиент отклонил входящие подключение\nСинхронизация громкости не возможна","Ошибка подключения к клиенту по TCP")
                 return
             asyncio.create_task(self.handler())
         else:

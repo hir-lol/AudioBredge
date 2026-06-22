@@ -25,16 +25,18 @@ class Tray:
         #self.isPing = False
         self.command = {
             notify : self.push_notifi,
-            valume : self._edit_value
+            valume : self._edit_value,
+            restart : self._restart_Sender
         }
-        self.AudioSender = AudioSender()
+        self.q = queue.Queue()
+
+        self.AudioSender = AudioSender(self.q)
         
-        self.SetingWindow = SetingWindow()
+        self.SetingWindow = SetingWindow(self.q)
         threading.Thread(target=lambda:self.SetingWindow._run(),daemon=True).start()
 
         try:
             self.queue = asyncio.Queue()
-            self.q = queue.Queue()
             config = load_config(str(get_base_path() + "/config.json"))
             self.Server = Server(ip=config.get("phone_ip"),port=int(config.get("port") + 1),q=self.queue,com_q=self.q)
         except Exception:
@@ -96,8 +98,9 @@ class Tray:
             self.AudioSender.stop()
         self.stop()
 
-    def _restart_Sender(self,icon,item):
+    def _restart_Sender(self,icon=None,item=None):
         log.info("Перезапуск передачи")
+        self.q.put({"type":"NOTIFY","value":"Перезапуск передачи"})
         self._tab_AudioSender()
         self._tab_AudioSender()
 
@@ -119,6 +122,7 @@ class Tray:
                     self.icon.title = "Ошибка запуска передачи"
                 return
             self.isRunning = True
+            self.SetingWindow.state_isRunning = True
             self.icon.title = "Передача запущена"
             self.icon.update_menu()
         else: 
@@ -126,6 +130,7 @@ class Tray:
             self.put({"type":"STOP"})
             self.isRunning = False
             self.AudioSender.stop()
+            self.SetingWindow.state_isRunning = False
             self.icon.title = "Audio in Wifi"
             self.icon.update_menu()
 
@@ -137,7 +142,7 @@ class Tray:
     def push_notifi(self,text:dict):
         if self.icon.HAS_NOTIFICATION:
             log.info("Вывод уведомления")
-            log.debug(f"Текст уведомления {text.get('value')}")
+            log.debug(f"Текст уведомления: {text.get('value')}")
             self.icon.notify(text.get("value"),"Audio in Wifi")
         else:
             log.info("Неудачная попытка вывод уведомления")
